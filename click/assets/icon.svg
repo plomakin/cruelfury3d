@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#19082b"/>
+      <stop offset="55%" stop-color="#2d0b45"/>
+      <stop offset="100%" stop-color="#0b1830"/>
+    </linearGradient>
+    <linearGradient id="neonPink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff2bd6"/>
+      <stop offset="100%" stop-color="#ff7b00"/>
+    </linearGradient>
+    <linearGradient id="neonCyan" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#28f7ff"/>
+      <stop offset="100%" stop-color="#008cff"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="54" fill="url(#bg)"/>
+  <rect x="10" y="10" width="236" height="236" rx="46" fill="none" stroke="url(#neonPink)" stroke-width="6"/>
+  <!-- Crosshair ring -->
+  <circle cx="128" cy="126" r="84" fill="none" stroke="#28f7ff" stroke-width="5" stroke-dasharray="32 14" opacity="0.85"/>
+  <line x1="128" y1="24" x2="128" y2="54" stroke="#28f7ff" stroke-width="6" stroke-linecap="round"/>
+  <line x1="128" y1="198" x2="128" y2="228" stroke="#28f7ff" stroke-width="6" stroke-linecap="round"/>
+  <line x1="26" y1="126" x2="56" y2="126" stroke="#28f7ff" stroke-width="6" stroke-linecap="round"/>
+  <line x1="200" y1="126" x2="230" y2="126" stroke="#28f7ff" stroke-width="6" stroke-linecap="round"/>
+  <!-- Cyber Skull + Mohawk + Visor -->
+  <path d="M114 36 L142 36 L148 68 L108 68 Z" fill="url(#neonPink)"/>
+  <path d="M78 102 C78 68 178 68 178 102 L174 148 L154 166 L154 190 L102 190 L102 166 L82 148 Z" fill="#e8eef7"/>
+  <!-- Glowing Cyber Visor -->
+  <rect x="80" y="100" width="96" height="28" rx="10" fill="#12091e"/>
+  <rect x="86" y="105" width="84" height="18" rx="6" fill="url(#neonCyan)"/>
+  <!-- Skull Nose & Teeth -->
+  <polygon points="128,136 119,152 137,152" fill="#19082b"/>
+  <line x1="114" y1="168" x2="114" y2="188" stroke="#19082b" stroke-width="5"/>
+  <line x1="128" y1="168" x2="128" y2="188" stroke="#19082b" stroke-width="5"/>
+  <line x1="142" y1="168" x2="142" y2="188" stroke="#19082b" stroke-width="5"/>
+  <!-- Crossed Shotgun Shells Accent -->
+  <rect x="52" y="202" width="152" height="22" rx="8" fill="url(#neonPink)"/>
+  <text x="128" y="218" font-family="sans-serif" font-weight="900" font-size="16" fill="#ffffff" text-anchor="middle" letter-spacing="3">CRUEL FURY</text>
+</svg>

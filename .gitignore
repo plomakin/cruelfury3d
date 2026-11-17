@@ -1,0 +1,10 @@
+/build/
+/.clickable/
+/click/lib/
+/click/LICENSE
+/scripts/stage_local_release.sh
+/scripts/init_git_repo.sh
+*.click
+*.o
+*.so
+.DS_Store

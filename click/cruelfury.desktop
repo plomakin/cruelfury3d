@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=Cruel Fury 3D
+Comment=Neon Boomer-Shooter 3D FPS for Ubuntu Touch
+Exec=cruelfury
+Icon=assets/icon.png
+Terminal=false
+Type=Application
+Categories=Game;ActionGame;
+X-Lomiri-Touch=true
+X-Lomiri-Default-Department-ID=games
