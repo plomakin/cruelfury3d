@@ -4,6 +4,7 @@
 #include "SynthAudio.h"
 
 #include <QElapsedTimer>
+#include <QPointF>
 #include <QQuickFramebufferObject>
 #include <QTimer>
 
@@ -19,6 +20,7 @@ class GameItem : public QQuickFramebufferObject {
     Q_PROPERTY(bool musicEnabled READ musicEnabled WRITE setMusicEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool sfxEnabled READ sfxEnabled WRITE setSfxEnabled NOTIFY settingsChanged)
     Q_PROPERTY(bool autoFire READ autoFire WRITE setAutoFire NOTIFY settingsChanged)
+    Q_PROPERTY(bool desktopInputActive READ desktopInputActive NOTIFY desktopInputActiveChanged)
 
     // Live HUD properties
     Q_PROPERTY(int health READ health NOTIFY hudChanged)
@@ -64,6 +66,9 @@ public:
     Q_INVOKABLE void interact();
     Q_INVOKABLE void selectWeapon(int index);
     Q_INVOKABLE void cycleWeapon(int dir);
+    Q_INVOKABLE void handleKeyEvent(int key, bool pressed);
+    Q_INVOKABLE void clearAllInputs();
+    Q_INVOKABLE void notifyTouchActive();
 
     void syncToSnapshot(RenderSnapshot& dst) const;
 
@@ -87,6 +92,7 @@ public:
     void setSfxEnabled(bool on);
     bool autoFire() const { return m_autoFire; }
     void setAutoFire(bool on);
+    bool desktopInputActive() const { return m_desktopInputActive; }
 
     int health() const { return m_sim.health(); }
     int armor() const { return m_sim.armor(); }
@@ -121,11 +127,28 @@ signals:
     void settingsChanged();
     void hudChanged();
     void hapticPulse(bool heavy);
+    void desktopInputActiveChanged();
+
+protected:
+    void hoverEnterEvent(QHoverEvent* event) override;
+    void hoverMoveEvent(QHoverEvent* event) override;
+    void hoverLeaveEvent(QHoverEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
+    void focusOutEvent(QFocusEvent* event) override;
 
 private slots:
     void onTick();
 
 private:
+    bool isGameplayInputActive() const;
+    void setDesktopInputActive(bool active);
+    void updateCursorVisibility();
+    void processMouseLook(const QPointF& localPos);
+    void combinedMoveAxes(float& outForward, float& outStrafe) const;
+
     SynthAudio m_audio;
     GameSim m_sim;
     QTimer m_timer;
@@ -141,8 +164,30 @@ private:
     bool m_musicEnabled = true;
     bool m_sfxEnabled = true;
     bool m_autoFire = false;
+    bool m_desktopInputActive = false;
 
-    float m_moveForward = 0.0f;
-    float m_moveStrafe = 0.0f;
-    bool m_fireHeld = false;
+    // Touch input state
+    float m_touchForward = 0.0f;
+    float m_touchStrafe = 0.0f;
+    bool m_touchFireHeld = false;
+
+    // Keyboard input state
+    bool m_keyForward = false;
+    bool m_keyBack = false;
+    bool m_keyStrafeLeft = false;
+    bool m_keyStrafeRight = false;
+    bool m_keyTurnLeft = false;
+    bool m_keyTurnRight = false;
+    bool m_keyAltStrafe = false;
+    bool m_keyFire = false;
+
+    // Hardware mouse look + button state
+    bool m_mouseFireHeld = false;
+    bool m_hasLastMousePos = false;
+    QPointF m_lastMousePos;
+    bool m_warpTested = false;
+    bool m_warpProbePending = false;
+    bool m_warpSupported = false;
+    bool m_expectingWarp = false;
+    float m_edgeTurnRate = 0.0f;
 };

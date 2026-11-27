@@ -5,9 +5,11 @@
 set -euo pipefail
 
 PROJ="$(cd "$(dirname "$0")/.." && pwd)"
-APP_ID="cruelfury.plm"
-CLICK_FILE="${PROJ}/release/${APP_ID}_1.0.0_arm64.click"
-CHANGELOG="${1:-Initial v1.0.0 release: 4 campaign floors + boss fight, CRUEL Clock & Endless Wave modes, 4 weapons + Mighty Boot kick, dual-thumb touch + gyro controls, live PCM darksynth soundtrack, and Lomiri haptics.}"
+APP_ID="$(python3 -c "import json; print(json.load(open('${PROJ}/click/manifest.json'))['name'])")"
+VERSION="$(python3 -c "import json; print(json.load(open('${PROJ}/click/manifest.json'))['version'])")"
+ARCH="$(python3 -c "import json; print(json.load(open('${PROJ}/click/manifest.json'))['architecture'])")"
+CLICK_FILE="${PROJ}/release/${APP_ID}_${VERSION}_${ARCH}.click"
+CHANGELOG="${1:-v1.1.0: Full mouse and keyboard support for Ubuntu Touch convergence/desktop — WASD + Arrow keys movement, smooth hover mouselook (no click-drag needed, with pointer warp + Wayland edge-turn fallback), LMB fire, RMB Fan burst, MMB/F Mighty Boot, Space/Shift dash, E interact, and 1-4 / Mouse Wheel weapon switching, plus Touch HUD Auto/On/Off toggle (Tab).}"
 
 if [ -z "${OPENSTORE_API_KEY:-}" ]; then
     echo "ERROR: Set OPENSTORE_API_KEY from https://open-store.io/manage (Account -> API Key)." >&2
@@ -24,7 +26,7 @@ if command -v devbox >/dev/null 2>&1; then
     CURL_CMD=(devbox curl -4 -fSL)
 fi
 
-echo "Uploading $(basename "$CLICK_FILE") to OpenStore (${APP_ID})..."
+echo "Uploading $(basename "$CLICK_FILE") to OpenStore (${APP_ID} v${VERSION})..."
 "${CURL_CMD[@]}" -X POST \
     "https://open-store.io/api/v4/manage/${APP_ID}/revision?apikey=${OPENSTORE_API_KEY}" \
     -F "file=@${CLICK_FILE}" \

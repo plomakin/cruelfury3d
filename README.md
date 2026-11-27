@@ -22,8 +22,9 @@ Inspired by *Duke Nukem 3D*, *CRUEL*, and *Ion Fury*, **Cruel Fury 3D** puts you
   - **`3` Ripper Triple-Chaingun** — high-RPM crowd shredder
   - **`4` Devastator Micro-RPG** — explosive splash rockets
   - **`BOOT` (Mighty Cyber-Boot)** — kick explosive hazmat barrels into enemies like bowling bombs, smash **Neon Soda Machines** (`+20 HP` + `+4s` time), and break **Cracked Secret Walls**!
-- **First-Class Ubuntu Touch / Lomiri Integration:**
-  - Simultaneous 4-finger `MultiPointTouchArea`: floating left thumbstick, precision right-half freelook, **aim-while-dragging `FIRE`**, and quick weapon strip
+- **First-Class Ubuntu Touch / Lomiri & Convergence Integration:**
+  - **Simultaneous Multi-Touch:** 4-finger `MultiPointTouchArea` with floating left thumbstick, precision right-half freelook, **aim-while-dragging `FIRE`**, and quick weapon strip
+  - **Full Mouse & Keyboard Support:** `WASD` / Arrow movement (`Alt`+Left/Right strafe), smooth hover mouselook without click-drag (with pointer warp + Wayland edge-turn fallback), `LMB` fire, `RMB` Fan burst, `MMB`/`F`/`Q` Mighty Boot, `Space`/`Shift` Dash, `E` Interact, `1`–`4` / Mouse Wheel weapon switching, `Tab` Touch HUD (`Auto` / `ON` / `OFF`)
   - Instant **`90°` Widescreen Landscape** toggle (works even when Ubuntu Touch portrait rotation-lock is on)
   - Optional **Gyroscope Aim Assist** (`QtSensors`) & **Lomiri Haptic Rumble** (`Haptics`)
   - Zero external asset bloat — 100% procedural 512×512 pixel-art texture atlas + real-time 44.1 kHz 16-bit PCM synth engine (`~150 KB` `.click` package!)
@@ -75,7 +76,7 @@ click build --no-validate ../click
 
 # Install locally into Lomiri App Drawer:
 gdbus call --system --dest com.lomiri.click --object-path /com/lomiri/click \
-  --method com.lomiri.click.Install "$PWD/cruelfury.plm_1.0.0_arm64.click"
+  --method com.lomiri.click.Install "$PWD/cruelfury.plm_1.1.0_arm64.click"
 ```
 
 ### Option B: Desktop Cross-Build with Clickable

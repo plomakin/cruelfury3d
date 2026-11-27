@@ -1,9 +1,9 @@
 {
   "name": "cruelfury.plm",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "architecture": "arm64",
   "title": "Cruel Fury 3D",
-  "description": "Neon cyberpunk boomer-shooter 3D FPS with dual-thumb touch controls, Mighty Boot kick, synth soundtrack & Lomiri haptics.",
+  "description": "Neon cyberpunk boomer-shooter 3D FPS with dual-thumb touch controls, full mouse & keyboard convergence support, Mighty Boot kick, synth soundtrack & Lomiri haptics.",
   "framework": "ubuntu-touch-24.04-1.x",
   "hooks": {
     "cruelfury": {

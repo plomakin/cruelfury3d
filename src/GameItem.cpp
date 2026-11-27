@@ -2,11 +2,15 @@
 #include "TextureAtlas.h"
 
 #include <GLES2/gl2.h>
+#include <QCursor>
+#include <QHoverEvent>
 #include <QMatrix4x4>
+#include <QMouseEvent>
 #include <QOpenGLContext>
 #include <QOpenGLFramebufferObject>
 #include <QOpenGLFramebufferObjectFormat>
 #include <QQuickWindow>
+#include <QWheelEvent>
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -555,6 +559,7 @@ GameItem::GameItem(QQuickItem* parent)
       m_sim(&m_audio) {
     setMirrorVertically(true);
     setAcceptedMouseButtons(Qt::AllButtons);
+    setAcceptHoverEvents(true);
 
     m_clock.start();
     m_lastNs = m_clock.nsecsElapsed();
@@ -571,9 +576,7 @@ void GameItem::startGame(int mode, int diff) {
     m_gameMode = std::clamp(mode, 0, 2);
     m_difficulty = std::clamp(diff, 0, 2);
     m_sim.startNewGame(static_cast<GameMode>(m_gameMode), m_difficulty);
-    m_moveForward = 0.0f;
-    m_moveStrafe = 0.0f;
-    m_fireHeld = false;
+    clearAllInputs();
     setPaused(false);
     emit gameModeChanged();
     emit difficultyChanged();
@@ -592,10 +595,9 @@ void GameItem::setPaused(bool p) {
     if (!p) {
         m_lastNs = m_clock.nsecsElapsed();
     } else {
-        m_moveForward = 0.0f;
-        m_moveStrafe = 0.0f;
-        m_fireHeld = false;
+        clearAllInputs();
     }
+    updateCursorVisibility();
     emit pausedChanged();
 }
 
@@ -644,8 +646,8 @@ void GameItem::setAutoFire(bool on) {
 }
 
 void GameItem::setMoveInput(float forward, float strafe) {
-    m_moveForward = std::clamp(forward, -1.0f, 1.0f);
-    m_moveStrafe = std::clamp(strafe, -1.0f, 1.0f);
+    m_touchForward = std::clamp(forward, -1.0f, 1.0f);
+    m_touchStrafe = std::clamp(strafe, -1.0f, 1.0f);
 }
 
 void GameItem::addTouchLook(float dxPixels, float dyPixels) {
@@ -662,7 +664,7 @@ void GameItem::addGyroRates(float rxDegPerSec, float ryDegPerSec, float dtSec) {
 }
 
 void GameItem::setFireHeld(bool held) {
-    m_fireHeld = held;
+    m_touchFireHeld = held;
 }
 
 void GameItem::altFire() {
@@ -681,7 +683,10 @@ void GameItem::bootKick() {
 
 void GameItem::jumpOrDash() {
     if (m_paused) return;
-    m_sim.triggerJumpOrDash(m_moveForward, m_moveStrafe);
+    float fwd = 0.0f;
+    float str = 0.0f;
+    combinedMoveAxes(fwd, str);
+    m_sim.triggerJumpOrDash(fwd, str);
     if (m_hapticsEnabled) emit hapticPulse(false);
 }
 
@@ -701,6 +706,305 @@ void GameItem::cycleWeapon(int dir) {
     emit hudChanged();
 }
 
+void GameItem::handleKeyEvent(int key, bool pressed) {
+    bool isDesktopKey = true;
+    switch (key) {
+        case Qt::Key_W:
+        case Qt::Key_Up:
+            m_keyForward = pressed;
+            break;
+        case Qt::Key_S:
+        case Qt::Key_Down:
+            m_keyBack = pressed;
+            break;
+        case Qt::Key_A:
+            m_keyStrafeLeft = pressed;
+            break;
+        case Qt::Key_D:
+            m_keyStrafeRight = pressed;
+            break;
+        case Qt::Key_Left:
+            m_keyTurnLeft = pressed;
+            break;
+        case Qt::Key_Right:
+            m_keyTurnRight = pressed;
+            break;
+        case Qt::Key_Alt:
+            m_keyAltStrafe = pressed;
+            break;
+        case Qt::Key_Control:
+        case Qt::Key_Return:
+        case Qt::Key_Enter:
+            m_keyFire = pressed;
+            break;
+        case Qt::Key_Space:
+        case Qt::Key_Shift:
+            if (pressed) jumpOrDash();
+            break;
+        case Qt::Key_Q:
+        case Qt::Key_F:
+            if (pressed) bootKick();
+            break;
+        case Qt::Key_E:
+            if (pressed) interact();
+            break;
+        case Qt::Key_R:
+            if (pressed) altFire();
+            break;
+        case Qt::Key_1:
+            if (pressed) selectWeapon(0);
+            break;
+        case Qt::Key_2:
+            if (pressed) selectWeapon(1);
+            break;
+        case Qt::Key_3:
+            if (pressed) selectWeapon(2);
+            break;
+        case Qt::Key_4:
+            if (pressed) selectWeapon(3);
+            break;
+        case Qt::Key_BracketLeft:
+            if (pressed) cycleWeapon(-1);
+            break;
+        case Qt::Key_BracketRight:
+            if (pressed) cycleWeapon(1);
+            break;
+        default:
+            isDesktopKey = false;
+            break;
+    }
+
+    if (pressed && isDesktopKey && isGameplayInputActive()) {
+        setDesktopInputActive(true);
+    }
+}
+
+void GameItem::clearAllInputs() {
+    m_touchForward = 0.0f;
+    m_touchStrafe = 0.0f;
+    m_touchFireHeld = false;
+    m_keyForward = false;
+    m_keyBack = false;
+    m_keyStrafeLeft = false;
+    m_keyStrafeRight = false;
+    m_keyTurnLeft = false;
+    m_keyTurnRight = false;
+    m_keyAltStrafe = false;
+    m_keyFire = false;
+    m_mouseFireHeld = false;
+    m_hasLastMousePos = false;
+    m_expectingWarp = false;
+    m_warpProbePending = false;
+    m_edgeTurnRate = 0.0f;
+}
+
+void GameItem::notifyTouchActive() {
+    m_hasLastMousePos = false;
+    m_edgeTurnRate = 0.0f;
+    setDesktopInputActive(false);
+    updateCursorVisibility();
+}
+
+bool GameItem::isGameplayInputActive() const {
+    return !m_paused && !m_sim.isGameOver() && !m_sim.isVictory();
+}
+
+void GameItem::setDesktopInputActive(bool active) {
+    if (m_desktopInputActive == active) return;
+    m_desktopInputActive = active;
+    updateCursorVisibility();
+    emit desktopInputActiveChanged();
+}
+
+void GameItem::updateCursorVisibility() {
+    if (m_desktopInputActive && isGameplayInputActive()) {
+        setCursor(Qt::BlankCursor);
+    } else {
+        unsetCursor();
+    }
+}
+
+void GameItem::processMouseLook(const QPointF& localPos) {
+    if (!isGameplayInputActive()) {
+        m_hasLastMousePos = false;
+        m_edgeTurnRate = 0.0f;
+        updateCursorVisibility();
+        return;
+    }
+
+    setDesktopInputActive(true);
+    updateCursorVisibility();
+
+    const float w = std::max(1.0f, static_cast<float>(width()));
+    const float h = std::max(1.0f, static_cast<float>(height()));
+    const QPointF center(w * 0.5f, h * 0.5f);
+
+    if (m_warpProbePending) {
+        m_warpProbePending = false;
+        const bool landedNearCenter = (std::abs(localPos.x() - center.x()) < 10.0 &&
+                                       std::abs(localPos.y() - center.y()) < 10.0);
+        m_warpSupported = landedNearCenter;
+        m_lastMousePos = localPos;
+        m_hasLastMousePos = true;
+        return;
+    }
+
+    if (m_expectingWarp) {
+        m_expectingWarp = false;
+        const bool nearCenter = (std::abs(localPos.x() - center.x()) < 12.0 &&
+                                 std::abs(localPos.y() - center.y()) < 12.0);
+        if (nearCenter) {
+            m_lastMousePos = localPos;
+            m_hasLastMousePos = true;
+            return;
+        }
+    }
+
+    if (!m_hasLastMousePos) {
+        m_lastMousePos = localPos;
+        m_hasLastMousePos = true;
+        return;
+    }
+
+    const float dx = static_cast<float>(localPos.x() - m_lastMousePos.x());
+    const float dy = static_cast<float>(localPos.y() - m_lastMousePos.y());
+    m_lastMousePos = localPos;
+
+    if (std::abs(dx) < 180.0f && std::abs(dy) < 180.0f) {
+        const float radPerPx = 0.0036f * m_lookSensitivity;
+        m_sim.addLookDelta(dx * radPerPx, -dy * radPerPx * 0.80f);
+    }
+
+    // Attempt pointer recentering on X11 / warp-capable compositors; otherwise use smooth edge turn
+    const float edgeDistX = std::abs(static_cast<float>(localPos.x()) - center.x()) / (w * 0.5f);
+    const float edgeDistY = std::abs(static_cast<float>(localPos.y()) - center.y()) / (h * 0.5f);
+    if (!m_warpTested && (edgeDistX > 0.25f || edgeDistY > 0.25f)) {
+        m_warpTested = true;
+        m_warpProbePending = true;
+        QCursor::setPos(mapToGlobal(center).toPoint());
+        m_edgeTurnRate = 0.0f;
+        return;
+    }
+
+    if (m_warpSupported) {
+        m_edgeTurnRate = 0.0f;
+        if (edgeDistX > 0.35f || edgeDistY > 0.35f) {
+            m_expectingWarp = true;
+            QCursor::setPos(mapToGlobal(center).toPoint());
+        }
+    } else {
+        // Fallback for Wayland/Mir compositors that disallow cursor warping: smooth 12% edge turn
+        const float normX = static_cast<float>(localPos.x()) / w;
+        if (normX < 0.12f) {
+            m_edgeTurnRate = -((0.12f - normX) / 0.12f);
+        } else if (normX > 0.88f) {
+            m_edgeTurnRate = ((normX - 0.88f) / 0.12f);
+        } else {
+            m_edgeTurnRate = 0.0f;
+        }
+    }
+}
+
+void GameItem::combinedMoveAxes(float& outForward, float& outStrafe) const {
+    float keyFwd = (m_keyForward ? 1.0f : 0.0f) - (m_keyBack ? 1.0f : 0.0f);
+    float keyStr = (m_keyStrafeRight ? 1.0f : 0.0f) - (m_keyStrafeLeft ? 1.0f : 0.0f);
+    if (m_keyAltStrafe) {
+        keyStr += (m_keyTurnRight ? 1.0f : 0.0f) - (m_keyTurnLeft ? 1.0f : 0.0f);
+    }
+    const float keyLen = std::hypot(keyFwd, keyStr);
+    if (keyLen > 1.0f) {
+        keyFwd /= keyLen;
+        keyStr /= keyLen;
+    }
+    outForward = std::clamp(keyFwd + m_touchForward, -1.0f, 1.0f);
+    outStrafe = std::clamp(keyStr + m_touchStrafe, -1.0f, 1.0f);
+}
+
+void GameItem::hoverEnterEvent(QHoverEvent* event) {
+    if (isGameplayInputActive()) {
+        setDesktopInputActive(true);
+        m_lastMousePos = event->posF();
+        m_hasLastMousePos = true;
+    }
+    event->accept();
+}
+
+void GameItem::hoverMoveEvent(QHoverEvent* event) {
+    processMouseLook(event->posF());
+    event->accept();
+}
+
+void GameItem::hoverLeaveEvent(QHoverEvent* event) {
+    m_hasLastMousePos = false;
+    m_edgeTurnRate = 0.0f;
+    unsetCursor();
+    event->accept();
+}
+
+void GameItem::mousePressEvent(QMouseEvent* event) {
+    if (event->source() != Qt::MouseEventNotSynthesized || !isGameplayInputActive()) {
+        event->ignore();
+        return;
+    }
+    setDesktopInputActive(true);
+    if (parentItem()) {
+        parentItem()->forceActiveFocus(Qt::MouseFocusReason);
+    }
+    if (!m_hasLastMousePos) {
+        m_lastMousePos = event->localPos();
+        m_hasLastMousePos = true;
+    }
+
+    if (event->button() == Qt::LeftButton) {
+        m_mouseFireHeld = true;
+    } else if (event->button() == Qt::RightButton) {
+        altFire();
+    } else if (event->button() == Qt::MiddleButton) {
+        bootKick();
+    }
+    event->accept();
+}
+
+void GameItem::mouseMoveEvent(QMouseEvent* event) {
+    if (event->source() != Qt::MouseEventNotSynthesized || !isGameplayInputActive()) {
+        event->ignore();
+        return;
+    }
+    processMouseLook(event->localPos());
+    event->accept();
+}
+
+void GameItem::mouseReleaseEvent(QMouseEvent* event) {
+    if (event->source() != Qt::MouseEventNotSynthesized) {
+        event->ignore();
+        return;
+    }
+    if (event->button() == Qt::LeftButton) {
+        m_mouseFireHeld = false;
+    }
+    event->accept();
+}
+
+void GameItem::wheelEvent(QWheelEvent* event) {
+    if (!isGameplayInputActive()) {
+        event->ignore();
+        return;
+    }
+    const int dy = event->angleDelta().y();
+    if (dy > 0) {
+        cycleWeapon(1);
+    } else if (dy < 0) {
+        cycleWeapon(-1);
+    }
+    event->accept();
+}
+
+void GameItem::focusOutEvent(QFocusEvent* event) {
+    clearAllInputs();
+    updateCursorVisibility();
+    QQuickFramebufferObject::focusOutEvent(event);
+}
+
 void GameItem::syncToSnapshot(RenderSnapshot& dst) const {
     m_sim.buildSnapshot(dst);
 }
@@ -711,13 +1015,30 @@ void GameItem::onTick() {
     m_lastNs = nowNs;
 
     if (!m_paused) {
-        SimEvents ev = m_sim.update(dt, m_moveForward, m_moveStrafe, m_fireHeld, m_autoFire);
+        if (isGameplayInputActive()) {
+            const float keyTurn = m_keyAltStrafe
+                                      ? 0.0f
+                                      : ((m_keyTurnRight ? 1.0f : 0.0f) - (m_keyTurnLeft ? 1.0f : 0.0f));
+            const float turnYaw = (keyTurn * 2.55f + m_edgeTurnRate * 2.25f) * m_lookSensitivity * dt;
+            if (std::abs(turnYaw) > 1e-5f) {
+                m_sim.addLookDelta(turnYaw, 0.0f);
+            }
+        }
+
+        float moveForward = 0.0f;
+        float moveStrafe = 0.0f;
+        combinedMoveAxes(moveForward, moveStrafe);
+        const bool fireHeld = m_touchFireHeld || m_mouseFireHeld || m_keyFire;
+
+        SimEvents ev = m_sim.update(dt, moveForward, moveStrafe, fireHeld, m_autoFire);
         if (m_hapticsEnabled) {
             if (ev.triggerHapticHeavy) emit hapticPulse(true);
             else if (ev.triggerHapticLight) emit hapticPulse(false);
         }
         if (m_sim.isGameOver() || m_sim.isVictory()) {
             m_audio.setPaused(true);
+            clearAllInputs();
+            updateCursorVisibility();
         }
         emit hudChanged();
         update();

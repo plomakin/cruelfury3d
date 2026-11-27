@@ -14,12 +14,17 @@ Window {
 
     property bool forceLandscape: true
     property bool showTitleScreen: true
+    property int touchHudMode: 0 // 0=Auto, 1=Always On, 2=Always Off
+    readonly property bool showTouchControls: touchHudMode === 1 || (touchHudMode === 0 && !game.desktopInputActive)
 
     Connections {
         target: Qt.application
         onStateChanged: {
-            if (Qt.application.state !== Qt.ApplicationActive && !showTitleScreen) {
-                game.paused = true
+            if (Qt.application.state !== Qt.ApplicationActive) {
+                game.clearAllInputs()
+                if (!showTitleScreen) {
+                    game.paused = true
+                }
             }
         }
     }
@@ -57,19 +62,34 @@ Window {
             rotation: rotate90 ? 90 : 0
             focus: true
 
-            // Keyboard fallback for SSH / Bluetooth keyboards
+            Connections {
+                target: game
+                onPausedChanged: {
+                    if (!game.paused && !rootWin.showTitleScreen) {
+                        stage.forceActiveFocus()
+                    }
+                }
+            }
+
+            // Full keyboard support (WASD / Arrows / Space / Q / F / E / R / 1-4 / Ctrl / Tab / Esc)
             Keys.onPressed: {
                 if (event.isAutoRepeat) return
                 if (event.key === Qt.Key_Escape || event.key === Qt.Key_P) {
                     if (!rootWin.showTitleScreen) game.paused = !game.paused
-                } else if (event.key === Qt.Key_Space) game.jumpOrDash()
-                else if (event.key === Qt.Key_Q || event.key === Qt.Key_F) game.bootKick()
-                else if (event.key === Qt.Key_E) game.interact()
-                else if (event.key === Qt.Key_R) game.altFire()
-                else if (event.key === Qt.Key_1) game.selectWeapon(0)
-                else if (event.key === Qt.Key_2) game.selectWeapon(1)
-                else if (event.key === Qt.Key_3) game.selectWeapon(2)
-                else if (event.key === Qt.Key_4) game.selectWeapon(3)
+                    event.accepted = true
+                } else if (event.key === Qt.Key_Tab) {
+                    rootWin.touchHudMode = (rootWin.touchHudMode + 1) % 3
+                    event.accepted = true
+                } else {
+                    game.handleKeyEvent(event.key, true)
+                    event.accepted = true
+                }
+            }
+
+            Keys.onReleased: {
+                if (event.isAutoRepeat) return
+                game.handleKeyEvent(event.key, false)
+                event.accepted = true
             }
 
             // === HARDWARE OPENGL ES 2.0 3D ENGINE VIEWPORT ===
@@ -146,6 +166,7 @@ Window {
 
                 // Left Floating Virtual Joystick Graphic
                 Rectangle {
+                    visible: rootWin.showTouchControls
                     x: (touchLayer.stickActive ? touchLayer.stickStartX : units.gu(10.5)) - width * 0.5
                     y: (touchLayer.stickActive ? touchLayer.stickStartY : (parent.height - units.gu(10.5))) - height * 0.5
                     width: touchLayer.stickMaxR * 2
@@ -171,6 +192,7 @@ Window {
                 // 1) Primary FIRE Trigger (supports hold-to-fire AND simultaneous drag-to-aim!)
                 Rectangle {
                     id: btnFire
+                    visible: rootWin.showTouchControls
                     width: units.gu(9.5)
                     height: width
                     radius: width * 0.5
@@ -194,6 +216,7 @@ Window {
                 // 2) MIGHTY BOOT KICK Button (Duke 3D / CRUEL staple!)
                 Rectangle {
                     id: btnBoot
+                    visible: rootWin.showTouchControls
                     width: units.gu(6.8)
                     height: width
                     radius: width * 0.5
@@ -217,6 +240,7 @@ Window {
                 // 3) FAN-THE-HAMMER Lock-On Burst (Ion Fury special!)
                 Rectangle {
                     id: btnFan
+                    visible: rootWin.showTouchControls
                     width: units.gu(6.4)
                     height: width
                     radius: width * 0.5
@@ -240,6 +264,7 @@ Window {
                 // 4) JUMP / DASH Dodge Button
                 Rectangle {
                     id: btnDash
+                    visible: rootWin.showTouchControls
                     width: units.gu(6.4)
                     height: width
                     radius: width * 0.5
@@ -260,10 +285,12 @@ Window {
                     }
                 }
 
-                // Fullscreen 4-Point Simultaneous Touch Tracker
+                // Fullscreen 4-Point Simultaneous Touch Tracker (isolated from hardware mouse!)
                 MultiPointTouchArea {
                     id: mpta
                     anchors.fill: parent
+                    enabled: rootWin.touchHudMode !== 2
+                    mouseEnabled: false
                     minimumTouchPoints: 1
                     maximumTouchPoints: 5
 
@@ -276,6 +303,7 @@ Window {
                     property real prevFireY: 0
 
                     onPressed: {
+                        game.notifyTouchActive()
                         for (var i = 0; i < touchPoints.length; ++i) {
                             var tp = touchPoints[i]
                             // Skip top HUD bar & bottom weapon switcher strip
@@ -369,6 +397,29 @@ Window {
 
                     onReleased: handleRelease(touchPoints)
                     onCanceled: handleRelease(touchPoints)
+                }
+
+                // Subtle Convergence / Keyboard-Mouse Hint Strip when Touch HUD is hidden
+                Rectangle {
+                    visible: !rootWin.showTouchControls
+                    anchors.left: parent.left
+                    anchors.leftMargin: units.gu(1.2)
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: units.gu(1.0)
+                    width: kbHintLbl.implicitWidth + units.gu(1.8)
+                    height: units.gu(2.8)
+                    radius: units.gu(0.6)
+                    color: "#770c0518"
+                    border.width: units.dp(1)
+                    border.color: "#4428f7ff"
+
+                    Label {
+                        id: kbHintLbl
+                        anchors.centerIn: parent
+                        text: "WASD Move · Mouse Aim · LMB Fire · RMB Fan · F/MMB Boot · Space Dash · E Use · Wheel Weapons · Tab Touch HUD · Esc Pause"
+                        fontSize: "x-small"
+                        color: "#b4e8ff"
+                    }
                 }
 
                 // Bottom-Center Quick Weapon Bar (1..4)
@@ -677,7 +728,10 @@ Window {
                                 text: "RESUME"
                                 color: LomiriColors.green
                                 width: units.gu(15)
-                                onClicked: game.paused = false
+                                onClicked: {
+                                    game.paused = false
+                                    stage.forceActiveFocus()
+                                }
                             }
 
                             Button {
@@ -687,6 +741,7 @@ Window {
                                 onClicked: {
                                     rootWin.showTitleScreen = false
                                     game.startGame(game.gameMode, game.difficulty)
+                                    stage.forceActiveFocus()
                                 }
                             }
                         }
@@ -811,6 +866,13 @@ Window {
                                         color: game.hapticsEnabled ? "#6a1b9a" : "#2c223e"
                                         onClicked: game.hapticsEnabled = !game.hapticsEnabled
                                     }
+                                    Button {
+                                        width: units.gu(14.8)
+                                        text: rootWin.touchHudMode === 0 ? "Touch HUD: Auto"
+                                            : (rootWin.touchHudMode === 1 ? "Touch HUD: ON" : "Touch HUD: OFF")
+                                        color: rootWin.touchHudMode === 2 ? "#2c223e" : "#1f6f8b"
+                                        onClicked: rootWin.touchHudMode = (rootWin.touchHudMode + 1) % 3
+                                    }
                                 }
 
                                 Label {
@@ -819,7 +881,7 @@ Window {
                                     horizontalAlignment: Text.AlignHCenter
                                     fontSize: "x-small"
                                     color: "#b4c5e4"
-                                    text: "TIPS: Left thumb moves · Right thumb aims · Dragging FIRE also aims! · BOOT kicks barrels into enemies & smashes Neon Soda Machines (+HP +Time) & cracked Secret Walls · FAN fires a 6-shot lock-on burst!"
+                                    text: "TOUCH: Left thumb moves · Right thumb aims · Drag FIRE to aim!   MOUSE+KB: WASD/Arrows Move · Hover Mouse Aim · LMB Fire · RMB Fan · F/MMB Boot · Space Dash · E Use · 1-4/Wheel Weapons"
                                 }
                             }
                         }
